@@ -19,20 +19,11 @@ jobs:
     permissions:
       contents: read
       packages: write
-      # This is required for requesting the JWT
       id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
-      # Login against a container registry
-      - name: Log into registry ${{ env.REGISTRY }}
-        uses: docker/login-action@v2
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       # Extract metadata for Docker
       - name: Extract Docker metadata
@@ -51,21 +42,66 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
 
-      # Build and push Docker image
-      - name: Build and push Docker image
-        id: build-and-push
+      # Build Docker image (no push)
+      - name: Build Docker image
+        id: build-image
         uses: docker/build-push-action@v4
         with:
           context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Save Docker image as artifact
+      - name: Save Docker image
+        run: docker save ${{ steps.meta.outputs.tags }} | gzip > image.tar.gz
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: docker-image
+          path: image.tar.gz
+
+  push:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: docker-image
+
+      # Login against a container registry
+      - name: Log into registry ${{ env.REGISTRY }}
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Load Docker image
+      - name: Load Docker image
+        run: gunzip -c image.tar.gz | docker load
+
+      # Push Docker image
+      - name: Push Docker image
+        run: |
+          for tag in $(docker images --format "{{.Repository}}:{{.Tag}}" | grep "^${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"); do
+            docker push $tag
+          done
+
       # Update deployment status
       - name: Update deployment status
-        if: github.event_name != 'pull_request'
         run: |
           echo "Image pushed to ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           echo "Tags: ${{ steps.meta.outputs.tags }}"
