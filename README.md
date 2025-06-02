@@ -9,6 +9,9 @@ Hello, you can use this project as a classic Todo API backend for experiments an
 - Dockerized application with docker-compose for easy deployment
 - Environment variable configuration
 - Kubernetes deployment with liveness and readiness probes
+- GitHub Actions workflow for CI/CD pipeline
+- Container images hosted on GitHub Container Registry (ghcr.io)
+- GitOps-ready with automatic manifest updates
 
 ## Prerequisites
 
@@ -20,8 +23,10 @@ Hello, you can use this project as a classic Todo API backend for experiments an
 
 ```
 todo-backend/
+├── .github/       # GitHub Actions workflows
 ├── configs/       # Database configuration
 ├── controllers/   # Request handlers
+├── k8s/           # Kubernetes manifests for deployment
 ├── models/        # Data models
 ├── routes/        # API routes
 ├── Dockerfile     # Docker image definition
@@ -139,6 +144,34 @@ docker-compose down
 
 ```bash
 docker-compose logs -f
+```
+
+## CI/CD with GitHub Actions
+
+This project includes GitHub Actions workflows for continuous integration and deployment:
+
+### Automated Workflows
+
+1. **Build and Push Docker Image** (.github/workflows/docker-build-push.yml)
+   - Triggered on pushes to main branch and tags (v*.*.*)
+   - Builds the Docker image and pushes it to GitHub Container Registry
+   - Tags images based on git references (branches, tags, commits)
+
+2. **Update Kubernetes Manifests** (.github/workflows/update-k8s-manifests.yml)
+   - Triggered after successful image build
+   - Updates the Kubernetes deployment manifest with the new image tag
+   - Commits and pushes changes back to the repository
+
+### Using the Container Images
+
+Pre-built container images are available at GitHub Container Registry:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/lakmalniranga/todo-backend:main
+
+# Run the container
+docker run -p 8080:8080 ghcr.io/lakmalniranga/todo-backend:main
 ```
 
 ## License
